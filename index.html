@@ -172,6 +172,12 @@ header{background:var(--navy);position:sticky;top:0;z-index:200;padding:0 40px;h
 .pill{padding:6px 14px;border-radius:99px;border:1.5px solid var(--border);background:#fff;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
 .pill.on{background:var(--navy);border-color:var(--navy);color:#fff;}
 .pill:hover:not(.on){border-color:var(--navy);color:var(--navy);}
+.date-range-wrap{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.dr-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+.dr-input{padding:6px 11px;border:1.5px solid var(--border);border-radius:9px;background:#fff;color:var(--text);font-family:'Inter',sans-serif;font-size:12px;outline:none;cursor:pointer;transition:all .18s;color-scheme:light;}
+.dr-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+.dr-clear{padding:6px 12px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:9px;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.dr-clear:hover{background:#fee2e2;}
 .tbl-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;}
 table{width:100%;border-collapse:collapse;}
 thead th{padding:12px 16px;text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;background:var(--off2);border-bottom:1px solid var(--border);white-space:nowrap;}
@@ -334,12 +340,21 @@ footer strong{color:rgba(255,255,255,.6);}
     <div class="sec-lbl">Records</div>
     <div class="tbl-ctrl">
       <div class="sec-ttl" style="margin-bottom:0">All Transactions</div>
-      <div class="pills">
-        <button class="pill on" onclick="setF('all',this)">All</button>
-        <button class="pill" onclick="setF('Claude.ai',this)">Claude.ai</button>
-        <button class="pill" onclick="setF('Cursor',this)">Cursor</button>
-        <button class="pill" onclick="setF('GitHub',this)">GitHub</button>
-        <button class="pill" onclick="setF('OpenAI',this)">OpenAI</button>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="pills">
+          <button class="pill on" onclick="setF('all',this)">All</button>
+          <button class="pill" onclick="setF('Claude.ai',this)">Claude.ai</button>
+          <button class="pill" onclick="setF('Cursor',this)">Cursor</button>
+          <button class="pill" onclick="setF('GitHub',this)">GitHub</button>
+          <button class="pill" onclick="setF('OpenAI',this)">OpenAI</button>
+        </div>
+        <div class="date-range-wrap">
+          <span class="dr-label">From</span>
+          <input type="date" id="dr-from" class="dr-input" onchange="setDateRange()" title="From date"/>
+          <span class="dr-label">To</span>
+          <input type="date" id="dr-to" class="dr-input" onchange="setDateRange()" title="To date"/>
+          <button class="dr-clear" id="dr-clear" onclick="clearDateRange()" style="display:none" title="Clear filter">✕ Clear</button>
+        </div>
       </div>
     </div>
     <div class="tbl-card"><div style="overflow-x:auto">
@@ -416,10 +431,18 @@ const SVC = {
   "OpenAI":   {c:"#dc2626",bg:"#fef2f2",bd:"#fca5a5",ic:"🔴"},
   "Other":    {c:"#d97706",bg:"#fffbeb",bd:"#fde68a",ic:"🟡"},
 };
-const MO = ["Apr 2025","May 2025","Jun 2025","Jul 2025","Aug 2025","Sep 2025","Oct 2025","Nov 2025","Dec 2025","Jan 2026","Feb 2026","Mar 2026"];
+// Dynamic month sort — works for ANY month/year, no hardcoded list needed
+function moKey(m) {
+  const MN = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const [mon, yr] = m.split(' ');
+  return parseInt(yr) * 12 + (MN[mon] ?? 0);
+}
+function sortMos(arr) { return [...arr].sort((a,b) => moKey(a) - moKey(b)); }
 
 let T       = [];
 let filt    = 'all';
+let dateFrom = '';   // 'YYYY-MM-DD' or ''
+let dateTo   = '';   // 'YYYY-MM-DD' or ''
 let ch      = null;
 let editId  = null;
 let isAdmin = false;
@@ -578,16 +601,27 @@ function toggleAdmin() {
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────
-function renderAll() { kpis(); chart(); merch(); timeline(); tbl(); }
+function renderAll() {
+  const filtered = getFilteredT();
+  kpis(filtered); chart(filtered); merch(filtered); timeline(filtered); tbl();
+}
 
-function kpis() {
-  const ti = T.reduce((s,t) => s+t.inr, 0), tu = T.reduce((s,t) => s+t.usd, 0);
+// Returns T filtered by date range (used for charts/kpis/timeline)
+function getFilteredT() {
+  let data = [...T];
+  if (dateFrom) data = data.filter(t => t.date >= dateFrom);
+  if (dateTo)   data = data.filter(t => t.date <= dateTo);
+  return data;
+}
+
+function kpis(data) {
+  const ti = data.reduce((s,t) => s+t.inr, 0), tu = data.reduce((s,t) => s+t.usd, 0);
   const bm = {}, bmo = {};
-  T.forEach(t => { bm[t.merchant] = (bm[t.merchant]||0)+t.inr; bmo[t.month] = (bmo[t.month]||0)+t.inr; });
+  data.forEach(t => { bm[t.merchant] = (bm[t.merchant]||0)+t.inr; bmo[t.month] = (bmo[t.month]||0)+t.inr; });
   const top = Object.entries(bm).sort((a,b) => b[1]-a[1])[0];
   const pk  = Object.entries(bmo).sort((a,b) => b[1]-a[1])[0];
   document.getElementById('kv-inr').textContent  = '₹'+ti.toLocaleString('en-IN',{maximumFractionDigits:0});
-  document.getElementById('kv-txn').textContent  = T.length+' transactions';
+  document.getElementById('kv-txn').textContent  = data.length+' transactions'+(dateFrom||dateTo?' (filtered)':'');
   document.getElementById('kv-usd').textContent  = '$'+tu.toFixed(2);
   document.getElementById('kv-top').textContent  = top ? top[0] : '—';
   document.getElementById('kv-top2').textContent = top ? '₹'+top[1].toLocaleString('en-IN',{maximumFractionDigits:0}) : '—';
@@ -595,12 +629,12 @@ function kpis() {
   document.getElementById('kv-peak2').textContent = pk ? '₹'+pk[1].toLocaleString('en-IN',{maximumFractionDigits:0}) : '—';
 }
 
-function chart() {
-  const mos = [...new Set(T.map(t=>t.month))].sort((a,b) => (MO.indexOf(a)||99)-(MO.indexOf(b)||99));
+function chart(data) {
+  const mos = sortMos([...new Set(data.map(t=>t.month))]);
   const ds = Object.keys(SVC).filter(s=>s!=='Other').map(s => ({
     label:s, stack:'s', borderRadius:4, borderWidth:1.5,
     backgroundColor:SVC[s].bg, borderColor:SVC[s].c,
-    data: mos.map(m => T.filter(t=>t.month===m&&t.merchant===s).reduce((a,t)=>a+t.inr,0))
+    data: mos.map(m => data.filter(t=>t.month===m&&t.merchant===s).reduce((a,t)=>a+t.inr,0))
   })).filter(d => d.data.some(v=>v>0));
   const ctx = document.getElementById('ch').getContext('2d');
   if (ch) ch.destroy();
@@ -614,11 +648,11 @@ function chart() {
   }});
 }
 
-function merch() {
-  const bm = {}; T.forEach(t => { bm[t.merchant] = (bm[t.merchant]||0)+t.inr; });
+function merch(data) {
+  const bm = {}; data.forEach(t => { bm[t.merchant] = (bm[t.merchant]||0)+t.inr; });
   const srt = Object.entries(bm).sort((a,b)=>b[1]-a[1]);
   const mx = srt[0]?.[1]||1, tot = Object.values(bm).reduce((s,v)=>s+v,0);
-  document.getElementById('ml').innerHTML = srt.map(([m,v]) => {
+  document.getElementById('ml').innerHTML = srt.length ? srt.map(([m,v]) => {
     const c = SVC[m]||SVC.Other, pct=(v/mx*100).toFixed(0), sh=(v/tot*100).toFixed(1);
     return `<div>
       <div class="mi-top">
@@ -628,15 +662,15 @@ function merch() {
         <div class="mi-amt">₹${v.toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
       </div>
       <div class="mi-track"><div class="mi-fill" style="width:${pct}%;background:${c.c}"></div></div>
-      <div class="mi-sub">${T.filter(t=>t.merchant===m).length} transactions</div>
+      <div class="mi-sub">${data.filter(t=>t.merchant===m).length} transactions</div>
     </div>`;
-  }).join('');
+  }).join('') : '<p style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">No data for selected range</p>';
 }
 
-function timeline() {
-  const mos = [...new Set(T.map(t=>t.month))].sort((a,b) => (MO.indexOf(a)||99)-(MO.indexOf(b)||99));
+function timeline(data) {
+  const mos = sortMos([...new Set(data.map(t=>t.month))]);
   document.getElementById('tl').innerHTML = mos.map((mo,i) => {
-    const txns = T.filter(t=>t.month===mo).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const txns = data.filter(t=>t.month===mo).sort((a,b)=>new Date(a.date)-new Date(b.date));
     const tot  = txns.reduce((s,t)=>s+t.inr,0);
     const cards = txns.map(t => {
       const c = SVC[t.merchant]||SVC.Other;
@@ -659,7 +693,10 @@ function timeline() {
 }
 
 function tbl() {
-  const fl = (filt==='all' ? [...T] : T.filter(t=>t.merchant===filt)).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  let fl = filt==='all' ? [...T] : T.filter(t=>t.merchant===filt);
+  if (dateFrom) fl = fl.filter(t => t.date >= dateFrom);
+  if (dateTo)   fl = fl.filter(t => t.date <= dateTo);
+  fl.sort((a,b)=>new Date(b.date)-new Date(a.date));
   const ti = fl.reduce((s,t)=>s+t.inr,0), tu = fl.reduce((s,t)=>s+t.usd,0);
   const rows = fl.map(t => {
     const c = SVC[t.merchant]||SVC.Other;
@@ -690,6 +727,21 @@ function tbl() {
 function fmtD(d) { const [y,m,day]=d.split('-'); return `${day}/${m}/${y.slice(2)}`; }
 function d2mo(d) { const dt=new Date(d); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()]+' '+dt.getFullYear(); }
 function setF(f,b) { filt=f; document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on')); b.classList.add('on'); tbl(); }
+
+function setDateRange() {
+  dateFrom = document.getElementById('dr-from').value;
+  dateTo   = document.getElementById('dr-to').value;
+  const active = dateFrom || dateTo;
+  document.getElementById('dr-clear').style.display = active ? 'inline-flex' : 'none';
+  renderAll();
+}
+function clearDateRange() {
+  dateFrom = dateTo = '';
+  document.getElementById('dr-from').value = '';
+  document.getElementById('dr-to').value   = '';
+  document.getElementById('dr-clear').style.display = 'none';
+  renderAll();
+}
 
 // ── MODAL ─────────────────────────────────────────────────────────────
 function openAdd() {
